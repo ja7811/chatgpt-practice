@@ -6,10 +6,8 @@ import com.theokanning.openai.completion.chat.ChatMessage;
 import com.theokanning.openai.completion.chat.ChatMessageRole;
 import com.theokanning.openai.service.OpenAiService;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.PrintWriter;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -21,18 +19,41 @@ import java.util.Scanner;
 public class Main {
     static final String USER = ChatMessageRole.USER.value();
     static final String SYSTEM = ChatMessageRole.SYSTEM.value();
+    static final String ASSISTANT = ChatMessageRole.ASSISTANT.value();
     static final String MODEL_NAME = "gpt-4o-mini"; // "gpt-4o";
     static final double TEMPERATURE = 0.4;
+    static OpenAiService service;
 
 
+    static String getOpenAiResult(List<ChatMessage> systemPrompt, List<ChatMessage> chatPrompt){
+        ChatCompletionRequest request = generatePrompt(systemPrompt, chatPrompt);
+        ChatCompletionResult result = service.createChatCompletion(request);
+        return result.getChoices().get(0).getMessage().getContent();
+    }
 
-    static String testKeywordFiltering(String keyword, OpenAiService service){
+    static String testKeywordFiltering(String keyword){
 
-        return null;
+        // 일단 번역부터
+        List<ChatMessage> systemPrompt = List.of(
+                new ChatMessage(SYSTEM, "You are a translator which translates english to korean."),
+                new ChatMessage(SYSTEM, "Translation result should look natural")
+        );
+
+        List<ChatMessage> chatPrompt = List.of(
+                new ChatMessage(USER, "Welcome to today's episode of our financial news podcast, where we delve into the latest developments in the S&P 500. "),
+                new ChatMessage(ASSISTANT, "오늘의 팟캐스트에 오신 걸 환영합니다! 오늘은 가장 최근의 S&P 500 근황에 대해 알아보겠습니다."),
+                new ChatMessage(USER, "A Farewell To Arms"),
+                new ChatMessage(ASSISTANT, "무기여 잘 있거라"),
+                new ChatMessage(USER, keyword)
+        );
+
+        String resultScript = getOpenAiResult(systemPrompt, chatPrompt);
+        saveResultToFile(keyword, resultScript, "keywordFilter");
+        return resultScript;
 
     }
 
-    static String testCastCreation(String keyword, OpenAiService service){
+    static String testCastCreation(String keyword){
 
         List<ChatMessage> systemPrompt = List.of(
                 new ChatMessage(SYSTEM, "You are the host of the podcast."),
@@ -49,35 +70,57 @@ public class Main {
         );
 
 
+        String resultScript = getOpenAiResult(systemPrompt, chatPrompt);
+
+        saveResultToFile(keyword, resultScript, "castCreation");
+        return resultScript;
+    }
+
+    static String testTranslation(String keyword, String script){
+        List<ChatMessage> systemPrompt = List.of(
+                new ChatMessage(SYSTEM, "You are a translator which translates english to korean."),
+                new ChatMessage(SYSTEM, "Translation result should look natural")
+        );
+
+        List<ChatMessage> chatPrompt = List.of(
+                new ChatMessage(USER, "Welcome to today's episode of our financial news podcast, where we delve into the latest developments in the S&P 500. "),
+                new ChatMessage(ASSISTANT, "오늘의 팟캐스트에 오신 걸 환영합니다! 오늘은 가장 최근의 S&P 500 근황에 대해 알아보겠습니다."),
+                new ChatMessage(USER, "A Farewell To Arms"),
+                new ChatMessage(ASSISTANT, "무기여 잘 있거라"),
+                new ChatMessage(USER, script)
+        );
+
+
         ChatCompletionRequest request = generatePrompt(systemPrompt, chatPrompt);
         ChatCompletionResult result = service.createChatCompletion(request);
+        String resultScript = result.getChoices().get(0).getMessage().getContent();
 
-        return result.getChoices().get(0).getMessage().getContent();
-
-    }
-
-    static String testTranslation(String script, OpenAiService service){
-        return null;
+        saveResultToFile(keyword, resultScript, "translation");
+        return resultScript;
     }
 
 
-    static void saveResultToFile(String keyword, String result){
+    static void saveResultToFile(String keyword, String result, String testDescription){
         String dirName = String.format("%.2f", TEMPERATURE).replace('.', '_');
         File dir = new File(dirName);
         if(!dir.exists()){
             dir.mkdir();
         }
 
-        File file = new File(dirName, keyword + ".txt");
+        String filename = keyword + "-" + testDescription;
+        File file = new File(dirName, filename + ".txt");
         int i = 1;
         while(file.exists()){
-            file = new File(dirName, keyword + "(" + i + ").txt");
+            file = new File(dirName, filename + "(" + i + ").txt");
             i++;
         }
 
-        try (PrintWriter writer = new PrintWriter(new FileWriter(file))) {
-            writer.println(result);
+        BufferedWriter writer = null;
+        try {
+            writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8));
+            writer.write(result);
             System.out.println("File written successfully: " + file.getAbsolutePath());
+            writer.close();
         } catch (IOException e) {
             System.err.println("Error writing to file: " + e.getMessage());
         }
@@ -107,18 +150,20 @@ public class Main {
             System.err.println("Error reading the file: " + e.getMessage());
         }
 
-        OpenAiService service = new OpenAiService(apiKey, Duration.ofSeconds(30));
+        service = new OpenAiService(apiKey, Duration.ofSeconds(30));
 
         System.out.print("Type in keyword: ");
         Scanner sc = new Scanner(System.in);
         String keyword = sc.nextLine();
 
-        String result = testCastCreation(keyword, service);
-        // String result = testTranslation("", service);
-        // String result = testKeywordFiltering(keyword, service);
-        System.out.println(result);
-        System.out.println();
-        saveResultToFile(keyword, result);
+        String castResult = "", translationResult = "", filterResult = "";
+//        castResult = testCastCreation(keyword, service);
+//        translationResult = testTranslation(keyword, castResult, service);
+//        filterResult = testKeywordFiltering(keyword, service);
+        System.out.println(castResult);
+        System.out.println(translationResult);
+        System.out.println(filterResult);
+
     }
 
 }
