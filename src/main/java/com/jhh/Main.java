@@ -26,8 +26,11 @@ public class Main {
 
 
     static String getOpenAiResult(List<ChatMessage> systemPrompt, List<ChatMessage> chatPrompt){
+        Long startTime = System.currentTimeMillis();
         ChatCompletionRequest request = generatePrompt(systemPrompt, chatPrompt);
         ChatCompletionResult result = service.createChatCompletion(request);
+        Long endTime = System.currentTimeMillis();
+        System.out.printf("Prompt consumed %d tokens total (%ds)%n", result.getUsage().getTotalTokens(), (endTime-startTime)/1000);
         return result.getChoices().get(0).getMessage().getContent();
     }
 
@@ -59,8 +62,8 @@ public class Main {
                 new ChatMessage(SYSTEM, "You are the host of the podcast."),
                 new ChatMessage(SYSTEM, "Your job is to make a podcast script about what happened recently. It is best if you say things based on real news"),
                 new ChatMessage(SYSTEM, "script should only contain what you have to say (no markdowns or background musics)"),
-                new ChatMessage(SYSTEM, "script should be " + 1 + " minutes long."),
-                new ChatMessage(SYSTEM, "Put '\n' at the end of each sentence"),
+                new ChatMessage(SYSTEM, "script should be " + 10 + " minutes long."),
+                new ChatMessage(SYSTEM, "Put '.\n@' at the end of each sentence"),
                 new ChatMessage(SYSTEM, "Answer in " + "official" + " manner."),
                 new ChatMessage(SYSTEM, "The script should be in english")
         );
@@ -79,21 +82,22 @@ public class Main {
     static String testTranslation(String keyword, String script){
         List<ChatMessage> systemPrompt = List.of(
                 new ChatMessage(SYSTEM, "You are a translator which translates english to korean."),
-                new ChatMessage(SYSTEM, "Translation result should look natural")
+                new ChatMessage(SYSTEM, "Translation result should look natural."),
+                new ChatMessage(SYSTEM, "'@' means end of the sentence; you should leave it be.")
         );
 
         List<ChatMessage> chatPrompt = List.of(
-                new ChatMessage(USER, "Welcome to today's episode of our financial news podcast, where we delve into the latest developments in the S&P 500. "),
-                new ChatMessage(ASSISTANT, "오늘의 팟캐스트에 오신 걸 환영합니다! 오늘은 가장 최근의 S&P 500 근황에 대해 알아보겠습니다."),
+                new ChatMessage(USER, "Welcome to today's episode of our financial news podcast, where we delve into the latest developments in the S&P 500. @"),
+                new ChatMessage(ASSISTANT, "오늘의 팟캐스트에 오신 걸 환영합니다! 오늘은 가장 최근의 S&P 500 근황에 대해 알아보겠습니다.@"),
                 new ChatMessage(USER, "A Farewell To Arms"),
                 new ChatMessage(ASSISTANT, "무기여 잘 있거라"),
+                new ChatMessage(USER, "Welcome! @ This is a test script! @ Thank you! @"),
+                new ChatMessage(ASSISTANT, "환영합니다! @ 이건 테스트용 스크립트입니다! @ 감사합니다! @"),
                 new ChatMessage(USER, script)
         );
 
 
-        ChatCompletionRequest request = generatePrompt(systemPrompt, chatPrompt);
-        ChatCompletionResult result = service.createChatCompletion(request);
-        String resultScript = result.getChoices().get(0).getMessage().getContent();
+        String resultScript = getOpenAiResult(systemPrompt, chatPrompt);
 
         saveResultToFile(keyword, resultScript, "translation");
         return resultScript;
@@ -107,7 +111,7 @@ public class Main {
             dir.mkdir();
         }
 
-        String filename = keyword + "-" + testDescription;
+        String filename = keyword.replace(" ", "-").replace('\"', '-') + "-" + testDescription;
         File file = new File(dirName, filename + ".txt");
         int i = 1;
         while(file.exists()){
@@ -157,9 +161,9 @@ public class Main {
         String keyword = sc.nextLine();
 
         String castResult = "", translationResult = "", filterResult = "";
-//        castResult = testCastCreation(keyword, service);
-//        translationResult = testTranslation(keyword, castResult, service);
-//        filterResult = testKeywordFiltering(keyword, service);
+        castResult = testCastCreation(keyword);
+        translationResult = testTranslation(keyword, castResult);
+//        filterResult = testKeywordFiltering(keyword);
         System.out.println(castResult);
         System.out.println(translationResult);
         System.out.println(filterResult);
